@@ -3,16 +3,15 @@ float playerY = 200;
 float playerSize = 30;
 float playerSpeed = 4;
 
-float blueX;
-float blueY;
+float blueX, blueY;
 
 int points = 0;
 int lives = 3;
+PImage playerImage1, playerImage2, cowImage, farmerImage;
 
-boolean up;
-boolean down;
-boolean left;
-boolean right;
+boolean up, down, left, right;
+
+int justPickedUp = 0;
 
 int maxRedBalls = 20;
 int numberOfRedBalls = 1;
@@ -34,6 +33,11 @@ void setup() {
 
 void draw() {
   background(255);
+  
+  playerImage1 = loadImage("player1.png");
+  playerImage2 = loadImage("player2.png");
+  cowImage = loadImage("cow.png");
+  farmerImage = loadImage("farmer.png");
 
   movePlayer();
   spawnRedBall();
@@ -41,19 +45,25 @@ void draw() {
   checkCollisions();
 
   // Blue dot
-  fill(0, 100, 255);
-  circle(blueX, blueY, 20);
-
+  image(cowImage, blueX, blueY, 24, 24);
+  
   // Red balls
   fill(255, 0, 0);
 
   for (int i = 0; i < numberOfRedBalls; i++) {
-    circle(redX[i], redY[i], 20);
+    image(farmerImage, redX[i], redY[i], 24, 24);
   }
 
   // Player
   fill(50);
-  rect(playerX, playerY, playerSize, playerSize);
+  
+  if (justPickedUp < 1){
+    image(playerImage1, playerX, playerY, 32, 32);
+  } else if (justPickedUp % 2 == 0){
+    image(playerImage2, playerX, playerY, 32, 32);
+  }
+  
+  justPickedUp--;
 
   // Lives counter
   fill(0);
@@ -132,6 +142,7 @@ void checkCollisions() {
   // Collision with blue dot
   if (dist(playerCenterX, playerCenterY, blueX, blueY) < 25) {
     points += 25*numberOfRedBalls;
+    justPickedUp = 10;
     moveBlueDot();
   }
 
