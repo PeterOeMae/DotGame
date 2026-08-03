@@ -1,239 +1,237 @@
-float playerX = 300;
-float playerY = 200;
-float playerSize = 30;
-float playerSpeed = 4;
+// HerdDash / DotGame
+// Coding Camp II Project 1 rescue build
+// Interactive Processing arcade game using classes, ArrayLists, and transformations.
 
-float blueX, blueY;
-
-int points = 0;
-int lives = 3;
 PImage playerImage1, playerImage2, cowImage, farmerImage;
+
+Player player;
+Cow cow;
+ArrayList<Farmer> farmers = new ArrayList<Farmer>();
+ArrayList<Star> stars = new ArrayList<Star>();
+ArrayList<FloatingText> floatingTexts = new ArrayList<FloatingText>();
 
 boolean up, down, left, right;
 
-int justPickedUp = 0;
+int score = 0;
+int lives = 3;
+int level = 1;
+int gameState = 0; // 0 = start, 1 = playing, 2 = game over
+int nextFarmerSpawnFrame = 0;
+int invincibleUntilFrame = 0;
 
-int maxRedBalls = 20;
-int numberOfRedBalls = 1;
-int spawnCounter = 0;
-
-float[] redX = new float[maxRedBalls];
-float[] redY = new float[maxRedBalls];
-float[] redDirectionX = new float[maxRedBalls];
-float[] redDirectionY = new float[maxRedBalls];
-
-float redSpeed = 2;
+final int STARTING_FARMERS = 2;
+final int MAX_FARMERS = 18;
+final int ROUND_SECONDS = 90;
+int gameStartMillis = 0;
 
 void setup() {
-  size(600, 400);
+  size(900, 600);
+  smooth();
 
-  moveBlueDot();
-  createRedBall(0);
-}
-
-void draw() {
-  background(255);
-  
+  // Load image assets once. The original version loaded these every frame.
   playerImage1 = loadImage("player1.png");
   playerImage2 = loadImage("player2.png");
   cowImage = loadImage("cow.png");
   farmerImage = loadImage("farmer.png");
 
-  movePlayer();
-  spawnRedBall();
-  moveRedBalls();
-  checkCollisions();
-
-  // Blue dot
-  image(cowImage, blueX, blueY, 24, 24);
-  
-  // Red balls
-  fill(255, 0, 0);
-
-  for (int i = 0; i < numberOfRedBalls; i++) {
-    image(farmerImage, redX[i], redY[i], 24, 24);
+  for (int i = 0; i < 120; i++) {
+    stars.add(new Star());
   }
 
-  // Player
-  fill(50);
-  
-  if (justPickedUp < 1){
-    image(playerImage1, playerX, playerY, 32, 32);
-  } else if (justPickedUp % 2 == 0){
-    image(playerImage2, playerX, playerY, 32, 32);
+  resetGame();
+}
+
+void draw() {
+  drawBackground();
+
+  if (gameState == 0) {
+    drawStartScreen();
+    return;
   }
-  
-  justPickedUp--;
 
-  // Lives counter
-  fill(0);
-  textSize(20);
-  textAlign(LEFT);
-  text("Lives: " + lives, 15, 30);
+  if (gameState == 1) {
+    updateGame();
+    drawGame();
+    drawHud();
+    return;
+  }
 
-  // Points counter
-  textAlign(RIGHT);
-  text("Points: " + points, width - 15, 30);
+  drawGame();
+  drawGameOverScreen();
+}
 
-  if (lives <= 0) {
-    background(0);
+void resetGame() {
+  score = 0;
+  lives = 3;
+  level = 1;
+  gameStartMillis = millis();
+  invincibleUntilFrame = 0;
+  nextFarmerSpawnFrame = frameCount + 180;
 
-    fill(255);
-    textAlign(CENTER);
-    textSize(32);
-    text("Game Over", width / 2, height / 2);
+  player = new Player(width / 2, height - 90, playerImage1, playerImage2);
+  cow = new Cow(cowImage);
+  farmers.clear();
+  floatingTexts.clear();
 
-    textSize(20);
-    text("Points: " + points, width / 2, height / 2 + 40);
-
-    noLoop();
+  for (int i = 0; i < STARTING_FARMERS; i++) {
+    spawnFarmer();
   }
 }
 
-void spawnRedBall() {
-  spawnCounter++;
+void updateGame() {
+  player.update(up, down, left, right);
+  cow.update();
 
-  // 300 frames is about 5 seconds at 60 FPS
-  if (spawnCounter >= 300 && numberOfRedBalls < maxRedBalls) {
-    createRedBall(numberOfRedBalls);
-    numberOfRedBalls++;
-    spawnCounter = 0;
-  }
-}
+  int secondsLeft = max(0, ROUND_SECONDS - ((millis() - gameStartMillis) / 1000));
+  level = 1 + score / 200 + (ROUND_SECONDS - secondsLeft) / 30;
 
-void createRedBall(int ballNumber) {
-  redX[ballNumber] = random(width);
-  redY[ballNumber] = random(50, height);
-
-  float angle = random(TWO_PI);
-
-  redDirectionX[ballNumber] = cos(angle);
-  redDirectionY[ballNumber] = sin(angle);
-}
-
-void moveRedBalls() {
-  for (int i = 0; i < numberOfRedBalls; i++) {
-    redX[i] += redDirectionX[i] * redSpeed;
-    redY[i] += redDirectionY[i] * redSpeed;
-
-    // Red ball wraps around the screen
-    if (redX[i] > width + 10) {
-      redX[i] = -10;
-    }
-
-    if (redX[i] < -10) {
-      redX[i] = width + 10;
-    }
-
-    if (redY[i] > height + 10) {
-      redY[i] = -10;
-    }
-
-    if (redY[i] < -10) {
-      redY[i] = height + 10;
-    }
-  }
-}
-
-void checkCollisions() {
-  float playerCenterX = playerX + playerSize / 2;
-  float playerCenterY = playerY + playerSize / 2;
-
-  // Collision with blue dot
-  if (dist(playerCenterX, playerCenterY, blueX, blueY) < 25) {
-    points += 25*numberOfRedBalls;
-    justPickedUp = 10;
-    moveBlueDot();
+  if (frameCount >= nextFarmerSpawnFrame && farmers.size() < MAX_FARMERS) {
+    spawnFarmer();
+    nextFarmerSpawnFrame = frameCount + max(70, 220 - level * 18);
   }
 
-  // Collision with red balls
-  for (int i = 0; i < numberOfRedBalls; i++) {
-    if (dist(playerCenterX, playerCenterY, redX[i], redY[i]) < 25) {
+  for (int i = farmers.size() - 1; i >= 0; i--) {
+    Farmer farmer = farmers.get(i);
+    farmer.update(level);
+
+    if (farmer.hits(player) && frameCount > invincibleUntilFrame) {
       lives--;
+      invincibleUntilFrame = frameCount + 90;
+      floatingTexts.add(new FloatingText("-1 life", player.x, player.y - 25, color(230, 45, 45)));
+      farmer.respawnAwayFrom(player.x, player.y);
+      player.resetPosition();
 
-      createRedBall(i);
-
-      // Move player away after being hit
-      playerX = width / 2;
-      playerY = height / 2;
-
-      break;
+      if (lives <= 0) {
+        gameState = 2;
+      }
     }
+  }
+
+  if (cow.hits(player)) {
+    int gained = 25 * max(1, level);
+    score += gained;
+    floatingTexts.add(new FloatingText("+" + gained, cow.x, cow.y, color(20, 145, 65)));
+    cow.respawnAwayFrom(player.x, player.y);
+  }
+
+  for (int i = floatingTexts.size() - 1; i >= 0; i--) {
+    FloatingText ft = floatingTexts.get(i);
+    ft.update();
+    if (ft.finished()) {
+      floatingTexts.remove(i);
+    }
+  }
+
+  if (secondsLeft <= 0) {
+    gameState = 2;
   }
 }
 
-void moveBlueDot() {
-  blueX = random(20, width - 20);
-  blueY = random(50, height - 20);
+void drawGame() {
+  cow.display();
+
+  for (Farmer farmer : farmers) {
+    farmer.display();
+  }
+
+  boolean invincible = frameCount < invincibleUntilFrame;
+  player.display(invincible);
+
+  for (FloatingText ft : floatingTexts) {
+    ft.display();
+  }
+}
+
+void drawBackground() {
+  background(245, 250, 242);
+
+  // Soft field/grid gives movement context without needing more assets.
+  stroke(220, 235, 215);
+  for (int y = 60; y < height; y += 60) {
+    line(0, y, width, y);
+  }
+
+  noStroke();
+  for (Star star : stars) {
+    star.update();
+    star.display();
+  }
+}
+
+void drawHud() {
+  int secondsLeft = max(0, ROUND_SECONDS - ((millis() - gameStartMillis) / 1000));
+
+  fill(20, 32, 45, 220);
+  rect(0, 0, width, 56);
+
+  fill(255);
+  textSize(20);
+  textAlign(LEFT, CENTER);
+  text("Lives: " + lives, 20, 28);
+  text("Level: " + level, 150, 28);
+  text("Farmers: " + farmers.size(), 270, 28);
+
+  textAlign(RIGHT, CENTER);
+  text("Score: " + score, width - 20, 28);
+  textAlign(CENTER, CENTER);
+  text("Time: " + secondsLeft + "s", width / 2, 28);
+}
+
+void drawStartScreen() {
+  fill(0, 125);
+  rect(0, 0, width, height);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(46);
+  text("HerdDash", width / 2, height / 2 - 105);
+
+  textSize(20);
+  text("Collect cows. Avoid farmers. Survive 90 seconds.", width / 2, height / 2 - 50);
+  text("Arrow keys or WASD to move", width / 2, height / 2 - 18);
+  text("Difficulty rises with score and time", width / 2, height / 2 + 14);
+
+  textSize(24);
+  text("Press SPACE to start", width / 2, height / 2 + 75);
+}
+
+void drawGameOverScreen() {
+  fill(0, 170);
+  rect(0, 0, width, height);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(42);
+  text("Game Over", width / 2, height / 2 - 50);
+
+  textSize(24);
+  text("Final score: " + score, width / 2, height / 2);
+  text("Press SPACE to restart", width / 2, height / 2 + 55);
+}
+
+void spawnFarmer() {
+  Farmer farmer = new Farmer(farmerImage);
+  farmer.respawnAwayFrom(player == null ? width / 2 : player.x, player == null ? height / 2 : player.y);
+  farmers.add(farmer);
 }
 
 void keyPressed() {
-  if (keyCode == UP) {
-    up = true;
-  }
+  if (keyCode == UP || key == 'w' || key == 'W') up = true;
+  if (keyCode == DOWN || key == 's' || key == 'S') down = true;
+  if (keyCode == LEFT || key == 'a' || key == 'A') left = true;
+  if (keyCode == RIGHT || key == 'd' || key == 'D') right = true;
 
-  if (keyCode == DOWN) {
-    down = true;
-  }
-
-  if (keyCode == LEFT) {
-    left = true;
-  }
-
-  if (keyCode == RIGHT) {
-    right = true;
+  if (key == ' ') {
+    if (gameState == 0 || gameState == 2) {
+      resetGame();
+      gameState = 1;
+    }
   }
 }
 
 void keyReleased() {
-  if (keyCode == UP) {
-    up = false;
-  }
-
-  if (keyCode == DOWN) {
-    down = false;
-  }
-
-  if (keyCode == LEFT) {
-    left = false;
-  }
-
-  if (keyCode == RIGHT) {
-    right = false;
-  }
-}
-
-void movePlayer() {
-  if (up) {
-    playerY -= playerSpeed;
-  }
-
-  if (down) {
-    playerY += playerSpeed;
-  }
-
-  if (left) {
-    playerX -= playerSpeed;
-  }
-
-  if (right) {
-    playerX += playerSpeed;
-  }
-
-  // Player wraps around the screen
-  if (playerX > width) {
-    playerX = -playerSize;
-  }
-
-  if (playerX + playerSize < 0) {
-    playerX = width;
-  }
-
-  if (playerY > height) {
-    playerY = -playerSize;
-  }
-
-  if (playerY + playerSize < 0) {
-    playerY = height;
-  }
+  if (keyCode == UP || key == 'w' || key == 'W') up = false;
+  if (keyCode == DOWN || key == 's' || key == 'S') down = false;
+  if (keyCode == LEFT || key == 'a' || key == 'A') left = false;
+  if (keyCode == RIGHT || key == 'd' || key == 'D') right = false;
 }
