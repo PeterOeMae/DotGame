@@ -1,0 +1,7 @@
+build/
+validation/
+dist/
+sharepoint/
+.jane-backup-*/
+*.class
+.DS_Store
